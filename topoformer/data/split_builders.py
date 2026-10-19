@@ -20,10 +20,17 @@ class SplitData:
     val_idx: Optional[np.ndarray] = None
 
 
-def _scan_class_folders_png(root: str, exts=(".png",)) -> Tuple[List[str], List[str]]:
+def _scan_class_folders_png(
+    root: str,
+    exts=(".png",),
+    exclude: Optional[Tuple[str, ...]] = None,
+) -> Tuple[List[str], List[str]]:
     assert os.path.isdir(root), f"not found: {root}"
 
     classes = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
+    if exclude:
+        ex_set = set(str(x) for x in exclude)
+        classes = [c for c in classes if c not in ex_set]
     classes = sorted(classes)
 
     paths: List[str] = []
@@ -78,7 +85,15 @@ def build_briancancer_train_test(
     img_exts = (".png",)
 
     train_paths, train_labels = _scan_class_folders_png(train_dir, exts=img_exts)
-    test_paths, test_labels = _scan_class_folders_png(test_dir, exts=img_exts)
+    # The test root may contain non-class subfolders (e.g. robustness_qc
+    # for QC artefacts, or perturbed splits such as patch_shuffle /
+    # stain_shift that mirror the class structure). Filter them out
+    # explicitly so they don't pollute the test labels and trigger the
+    # "unseen categories" assertion below.
+    test_paths, test_labels = _scan_class_folders_png(
+        test_dir, exts=img_exts,
+        exclude=("robustness_qc", "patch_shuffle", "stain_shift"),
+    )
 
     label_names = sorted(set(train_labels))
     domain_to_id = {name: i for i, name in enumerate(label_names)}
@@ -100,15 +115,28 @@ def build_briancancer_train_test(
     n_test = int(len(test_paths))
     n_all = int(n_train + n_test)
 
-    train_idx = np.arange(0, n_train, dtype=np.int64)
+    train_idx_all = np.arange(0, n_train, dtype=np.int64)
     test_idx = np.arange(n_train, n_all, dtype=np.int64)
-    val_idx = np.asarray([], dtype=np.int64)
 
+    from sklearn.model_selection import train_test_split
+
+    train_idx, val_idx = train_test_split(
+        train_idx_all,
+        test_size=0.1,
+        stratify=y_train,
+        random_state=42,
+    )
+    train_idx = np.asarray(train_idx, dtype=np.int64)
+    val_idx = np.asarray(val_idx, dtype=np.int64)
+
+    val_label_counts = Counter([str(id_to_domain[int(y_train[int(c)])]) for c in val_idx])
     print("[info] Briancancer train/test split")
     print("[info] train dir:", train_dir, "N=", n_train)
     print("[info] test dir:", test_dir, "N=", n_test)
     print("[info] classes:", id_to_domain)
     print("[info] type counts:", {k: int(v) for k, v in label_counts.items()})
+    print(f"[info] actual train (90% of train): N={int(train_idx.size)} val (10% stratified): N={int(val_idx.size)}")
+    print("[info] val per-class counts:", {k: int(v) for k, v in val_label_counts.items()})
 
     return SplitData(
         paths=paths,

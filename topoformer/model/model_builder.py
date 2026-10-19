@@ -25,7 +25,19 @@ def build_topoformer_model(
     topo_num_heads,
     convnext_ckpt: str,
     convnext_name: str,
+    topo_delta_norm_factor: float = 0.3,
+    topo_inject_mode: str = "per_level",
 ):
+    # topo_inject_mode:
+    #   "per_level"  -> canonical TopoFPN path; topo_c=400; each stage gets its own Lk map.
+    #   "raw_concat" -> simple-concat ablation; topo_c=1600; all stages see the same
+    #                   already-channel-concatenated map. The caller is expected to
+    #                   provide that single 1600ch map under the "L0" key (or any key
+    #                   actually; the hook forces L0 in raw_concat mode).
+    if topo_inject_mode not in {"per_level", "raw_concat"}:
+        raise ValueError(
+            f"topo_inject_mode must be 'per_level' or 'raw_concat', got {topo_inject_mode!r}"
+        )
     vit = OrthogonalDisentangler(
         encoder_source="dinov3",
         encoder_name=encoder_name,
@@ -66,6 +78,8 @@ def build_topoformer_model(
             mixer_heads=topo_num_heads,
             attn_dropout=topo_attn_dropout,
             proj_dropout=topo_proj_dropout,
+            delta_norm_factor=topo_delta_norm_factor,
+            mode=topo_inject_mode,
         )
 
         vit.encoder._topo_hook = vit.topo_injector
@@ -128,4 +142,18 @@ def build_topoformer_model(
     model.gate_fc.float()
 
     model = model.to(device)
+    # Surface any async CUDA illegal-access / ECC error that was queued
+    # by an earlier op (e.g. previous `model.to()` from preflight), so
+    # the user gets a clean stack instead of a misleading one.
+    if str(device).startswith("cuda") and torch.cuda.is_available():
+        try:
+            torch.cuda.synchronize(device)
+        except RuntimeError:
+            # Re-raise with a clearer message.
+            raise RuntimeError(
+                f"CUDA error during `model.to({device})` — this is almost "
+                f"always a *previous* async illegal memory access (ECC / "
+                f"OOB) that bubbled up here. Check earlier GPU work and "
+                f"consider `CUDA_LAUNCH_BLOCKING=1`."
+            ) from None
     return model

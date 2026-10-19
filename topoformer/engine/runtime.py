@@ -29,6 +29,7 @@ def build_train_args(
     fd_lora_r: int,
     fd_lora_alpha: float,
     fd_lora_dropout: float,
+    label_smoothing: float = 0.05,
 ):
     return argparse.Namespace(
         epochs=fd_epochs,
@@ -44,7 +45,7 @@ def build_train_args(
         lora_r=fd_lora_r,
         lora_alpha=fd_lora_alpha,
         lora_dropout=fd_lora_dropout,
-        label_smoothing=0.0,
+        label_smoothing=float(label_smoothing),
         use_pos_weight=False,
         ema=True,
         ema_decay=0.999,
@@ -88,6 +89,11 @@ def build_train_args(
         kd_weight=0.0,
         kd_teacher_path=None,
         kd_temperature=1.0,
+        # Disable loading best@val weights at end of training.
+        # Reason: neither script passes a real val_loader; test_loader is held out
+        # and must NOT be used to select model checkpoints. The final test evaluation
+        # is therefore performed on truly independent last-epoch weights.
+        load_best_at_end=False,
     )
 
 

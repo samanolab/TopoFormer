@@ -1,0 +1,72 @@
+# TopoFormer — License
+
+Copyright (c) 2026 TopoFormer Authors
+
+This repository contains or links to third-party code and datasets,
+each governed by their own licenses (see below).
+
+## Project Code
+
+TopoFormer project code (files under `topoformer/`, `scripts/`, `notebooks/`,
+`Backbone/` and all other source files unless noted otherwise) may be used for
+academic research purposes, provided that:
+
+1. Appropriate credit is given to the TopoFormer paper and this repository.
+2. Any redistribution of modified or unmodified source code maintains
+   this copyright notice and the notices of any upstream licenses embedded
+   within the code.
+
+**This license does not grant permission to use the DINOv3 pretrained
+checkpoints or ConvNeXt V2 pretrained weights for commercial purposes.
+Those checkpoints are governed by their respective upstream licenses
+(Meta DINOv3 License and ConvNeXt V2 License respectively).**
+
+For a full reproduction of the published experimental results, also obtain
+the required pretrained weights from their official sources and comply with
+their distribution terms.
+
+## DINOv3 (Backbone/)
+
+The DINOv3 code included in this repository under `Backbone/dinov3/`
+is governed by the **DINOv3 License Agreement** (see
+`Backbone/dinov3/dinov3/LICENSE.md`). Summary: for the specific terms
+governing use of the DINOv3 model weights, see the official
+[DINOv3 License Agreement](https://github.com/facebookresearch/dinov3/blob/main/LICENSE).
+
+## ConvNeXt V2
+
+The ConvNeXt V2 encoder used by this project is governed by the
+[ConvNeXt V2 license](https://github.com/facebookresearch/ConvNeXt-V2/blob/main/LICENSE).
+
+## GUDHI
+
+Topological data analysis relies on GUDHI, licensed under the
+[GUDHI Open Source License](https://gudhi.inria.fr/licensing/) (GNU GPL v3+).
+
+## Benchmark Datasets
+
+All benchmark datasets used in this work (DeepHisto, NCT-CRC-HE-100K,
+CRC-VAL-HE-7K, TCGA-UT) are governed by their respective original
+distribution terms. Researchers using these datasets must comply with
+the original data-use agreements and licenses specified by the dataset
+publishers.
+
+## Third-Party Python Packages
+
+This project depends on open-source Python packages (PyTorch, NumPy,
+scikit-learn, etc.). Each is used under its respective open-source
+license. Consult the `requirements.txt` file and the packages' own
+license documents for details.
+
+## Citation
+
+If this work or its code contributes to your research, please cite:
+
+```bibtex
+@article{li2026topoformer,
+  title   = {TopoFormer: A Multi-Scale Topology-Aware Visual Transformer for H\&E Tumor Classification},
+  author  = {Li, Zhibo and Peng, Sijun and Liu, Jian and Rodr{\'i}guez, Alfredo and Chan, Kuan Yoow and S{\'a}mano-S{\'a}nchez, Hugo},
+  journal = {IEEE Journal of Biomedical and Health Informatics},
+  year    = {2026}
+}
+```

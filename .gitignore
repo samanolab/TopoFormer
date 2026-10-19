@@ -1,0 +1,51 @@
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+*.pyc
+*.pyo
+*.pyd
+
+# Model checkpoints, datasets, intermediate caches
+*.pth
+*.pt
+*.ckpt
+*.safetensors
+*.npz
+*.npy
+*.tar
+*.tar.gz
+*.zip
+*.h5
+*.hdf5
+*.parquet
+
+# Generated logs
+*.log
+logs/
+wandb/
+runs/
+
+# OS / IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+environment-lock.txt
+
+# Large PH generation outputs (referenced in code as path suffixes)
+features_cache_*/
+checkpoints/
+checkpoint/
+PHC/
+PHC_180/
+
+# Prevent accidental nested repository copies of the project itself
+topoformer/Github/

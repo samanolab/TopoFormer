@@ -1176,7 +1176,7 @@ def train(
     device: torch.device,
     args: argparse.Namespace,
     logger: logging.Logger,
-) -> List[Dict[str, float]]:
+) -> Tuple[List[Dict[str, float]], Optional[Dict[str, torch.Tensor]]]:
     def _unpack_batch(batch):
         if not isinstance(batch, (tuple, list)):
             raise ValueError(f"Unexpected batch type: {type(batch)}")
@@ -1620,9 +1620,16 @@ def train(
         history.append(record)
         logger.info(json.dumps(record))
 
-        # Update best on full validation only
+        # Update best on full validation only.
+        # Prefer Balanced Accuracy over plain accuracy when available
+        # so that epoch selection respects class imbalance.
         if do_val and run_full:
-            current_score = val_metrics["auc_A"] if is_binary else val_metrics["acc_A"]
+            if "bal_acc_A" in val_metrics and isinstance(val_metrics["bal_acc_A"], float) and not math.isnan(val_metrics["bal_acc_A"]):
+                current_score = val_metrics["bal_acc_A"]
+            elif is_binary:
+                current_score = val_metrics["auc_A"]
+            else:
+                current_score = val_metrics["acc_A"]
             if isinstance(current_score, float) and (not math.isnan(current_score)):
                 improved = current_score > best_score
             else:
@@ -1664,7 +1671,7 @@ def train(
         # Attach for saving downstream
         model._best_ema_state = best_ema_state  # type: ignore[attr-defined]
 
-    return history
+    return history, best_state if best_state else None
 
 
 @torch.no_grad()
