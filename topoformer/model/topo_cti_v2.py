@@ -47,7 +47,7 @@ Modes:
 - "raw_concat": all four stages consume the *same* already-channel-
   concatenated 1600-channel map. Caller supplies it via `topo_levels["L0"]`
   (and may leave L1..L3 empty / None). Used by the simple-concat ablation
-  where there is no FPN smoothing and no cross-scale mixing.
+    where there is no FPN smoothing and no cross-scale mixing.
     """
     def __init__(
         self,
@@ -90,7 +90,7 @@ Modes:
         heads = mixer_heads if mixer_heads is not None else max(1, token_dim // 64)
         
         for _ in range(n_stages):
-           # Align the dimensions of Topo Map to those of DINO
+            # Align the dimensions of Topo Map to those of DINO
             self.topo_projs.append(
                 nn.Sequential(
                     nn.Conv2d(topo_in_channels, token_dim, kernel_size=1, bias=False),
@@ -177,8 +177,7 @@ Modes:
             x_out = x_out.to(orig_dtype)
 
             if is_list:
-                x_list.append(x_out)
-                return x_list
+                return x_list[:-1] + [x_out]
             return x_out
 
         return x_list

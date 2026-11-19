@@ -79,8 +79,8 @@ def _scan_files_by_prefix_label(root: str, exts=(".tif", ".tiff")) -> Tuple[List
 
 
 def build_briancancer_train_test(
-    train_dir: str = "/home/imagea/DBs/Briancancer/train/train",
-    test_dir: str = "/home/imagea/DBs/Briancancer/test/test",
+    train_dir: str = "/datasets/Briancancer/train/train",
+    test_dir: str = "/datasets/Briancancer/test/test",
 ) -> SplitData:
     img_exts = (".png",)
 
@@ -153,8 +153,8 @@ def build_briancancer_train_test(
 
 
 def build_nctcrc100k_trainval_crcval7k_test(
-    trainval_dir: str = "/home/imagea/DBs/NCT-CRC-HE-100K",
-    test_dir: str = "/home/imagea/DBs/CRC-VAL-HE-7K",
+    trainval_dir: str = "/datasets/NCT-CRC-HE-100K",
+    test_dir: str = "/datasets/CRC-VAL-HE-7K",
 ) -> SplitData:
     img_exts = (".tif", ".tiff")
 

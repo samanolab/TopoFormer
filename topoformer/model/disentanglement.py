@@ -1204,7 +1204,8 @@ def train(
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
-    scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
+    scaler = torch.cuda.amp.GradScaler(enabled=args.amp, init_scale=16384.0, growth_interval=1000000)
+    logger.info(f"CTI_AMP_POLICY enabled={args.amp} scale={scaler.get_scale():.0f} growth_interval=1000000")
 
     is_binary = (model.out_dim == 1)
     if is_binary:
@@ -1250,6 +1251,15 @@ def train(
     do_val = val_loader is not None
 
     global_step = 0
+    cti = getattr(args, "cti_audit", None)
+    checkpoint_dir = getattr(args, "cti_output", None)
+    if cti is not None:
+        cti_probes = {f"L{i}.out": cti.stages[i].out.weight for i in cti.levels}
+        if cti.variant == "attention":
+            cti_probes["L3.value"] = cti.stages[3].v.weight
+        elif 3 in cti.levels:
+            cti_probes["L3.CLS"] = cti.stages[3].cls_out.weight
+        cti_before = {name: param.detach().clone() for name, param in cti_probes.items()}
     # Optional KD teacher on A head
     kd_teacher: Optional[OrthogonalDisentangler] = None
     kd_weight = float(getattr(args, "kd_weight", 0.0))
@@ -1391,6 +1401,8 @@ def train(
                     # Feature step: minimize MI with current MINE
                     mi_est = mine_head.estimate_mi(f_disc, f_indisc)  # type: ignore[union-attr]
                     loss_decouple = mi_est
+                elif args.decouple_mode == "none":
+                    loss_decouple = loss_cls.new_zeros(())
                 else:
                     # cov/hsic/gram via selective wrapper, optionally reweighted by per-dim importance
                     imp_vec: Optional[torch.Tensor] = None
@@ -1532,17 +1544,48 @@ def train(
                         tracked_name, tracked_before = n, p.data.detach().clone()
                         break
 
+            if cti is not None and not math.isfinite(loss_total.item()):
+                bad = [f"L{i}" for i, stage in enumerate(cti.stages)
+                       if not torch.isfinite(stage.last_amax)]
+                raise FloatingPointError(
+                    f"CTI_NONFINITE epoch={epoch} step={global_step + 1} first_cti={next(iter(bad), None)} "
+                    f"loss={loss_total.item()} grad_norm=unavailable_before_backward"
+                )
             scaler.scale(loss_total).backward()
 
             if (global_step + 1) % args.accum_steps == 0:
                 # optional gradient clipping (needs unscale before clipping)
                 if args.clip_grad_norm > 0:
                     scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(
-                        [p for p in model.parameters() if p.requires_grad], max_norm=args.clip_grad_norm
-                    )
+                    try:
+                        grad_norm = torch.nn.utils.clip_grad_norm_(
+                            [p for p in model.parameters() if p.requires_grad],
+                            max_norm=args.clip_grad_norm, error_if_nonfinite=cti is not None,
+                        )
+                    except RuntimeError as error:
+                        if cti is None or "non-finite" not in str(error):
+                            raise
+                        bad = [f"L{i}" for i, stage in enumerate(cti.stages)
+                               if any(p.grad is not None and not torch.isfinite(p.grad).all()
+                                      for p in stage.parameters())]
+                        raise FloatingPointError(
+                            f"CTI_NONFINITE epoch={epoch} step={global_step + 1} first_cti={next(iter(bad), None)} "
+                            f"loss={loss_total.item():.9g} grad_norm=nonfinite_pre_clip scale={scaler.get_scale()}"
+                        ) from error
+                if cti is not None and global_step == 0:
+                    gradients = {name: param.grad.detach().abs().amax().item() if param.grad is not None else 0
+                                 for name, param in cti_probes.items()}
+                    assert all(math.isfinite(value) and value > 0 for value in gradients.values()), gradients
                 scaler.step(optimizer)
                 scaler.update()
+                if cti is not None and global_step == 0:
+                    deltas = {name: (param.detach() - cti_before[name]).abs().amax().item()
+                              for name, param in cti_probes.items()}
+                    assert all(math.isfinite(value) and value > 0 for value in deltas.values()), deltas
+                    logger.info(f"CTI_OPTIMIZER_PASS variant={cti.variant} gradients={gradients} changes={deltas}")
+                    del cti_before
+                if cti is not None and (global_step + 1) % 100 == 0:
+                    logger.info(f"CTI_STEP epoch={epoch} step={global_step + 1} loss={loss_total.item():.7g} grad_norm={grad_norm.item():.7g}")
                 optimizer.zero_grad(set_to_none=True)
                 if ema is not None:
                     ema.update(model)
@@ -1636,8 +1679,22 @@ def train(
                 improved = False
             if improved:
                 best_score = current_score
-                best_state = {k: v.detach().cpu() for k, v in model.state_dict().items()}
-                if ema is not None:
+                fingerprint = getattr(args, "cti_dino_sha256", None)
+                if fingerprint:
+                    from .checkpoints import compact_state
+
+                    best_payload = compact_state(model, fingerprint)
+                    best_state = best_payload["weights"]
+                else:
+                    best_state = {k: v.detach().cpu() for k, v in model.state_dict().items()}
+                    best_payload = best_state
+                if checkpoint_dir is not None:
+                    temporary = checkpoint_dir / "best_val.tmp"
+                    torch.save(best_payload, temporary)
+                    temporary.replace(checkpoint_dir / "best_val.pt")
+                    label = "CTI_CHECKPOINT" if cti is not None else "NO_CTI_CHECKPOINT"
+                    logger.info(f"{label} epoch={epoch} val_BAcc_EMA={best_score:.9f}")
+                if ema is not None and checkpoint_dir is None and cti is None:
                     # store EMA weights too
                     ema.apply_to(model)
                     best_ema_state = {k: v.detach().cpu() for k, v in model.state_dict().items()}

@@ -38,13 +38,10 @@ class AlfredoFDDataset(Dataset):
         if str(self.device).startswith("cuda"):
             x3 = x3.half()
 
-        topo_np = self.topo_store.get_all_levels(npath)
-        topo_levels = {
-            "L0": torch.from_numpy(topo_np["L0"]).float(),
-            "L1": torch.from_numpy(topo_np["L1"]).float(),
-            "L2": torch.from_numpy(topo_np["L2"]).float(),
-            "L3": torch.from_numpy(topo_np["L3"]).float(),
-        }
+        topo_levels = {}
+        if self.topo_store is not None:
+            topo_np = self.topo_store.get_all_levels(npath)
+            topo_levels = {k: torch.from_numpy(topo_np[k]).float() for k in ("L0", "L1", "L2", "L3")}
 
         for k in list(topo_levels.keys()):
             topo_levels[k] = torch.nan_to_num(topo_levels[k], nan=0.0, posinf=0.0, neginf=0.0)

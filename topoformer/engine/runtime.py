@@ -128,7 +128,8 @@ def collect_split(model, loader, device):
         indisc.append(out["f_indisc"].detach().cpu().numpy())
         logitsA.append(out["logitsA"].detach().cpu().numpy())
         logitsB.append(out["logitsB"].detach().cpu().numpy())
-        ys.append(np.asarray(targets, dtype=np.int64))
+        # Do not retain a view of the worker's shared label storage.
+        ys.append(np.array(targets, dtype=np.int64, copy=True))
         paths.extend([str(x) for x in pths])
 
     return {
@@ -162,8 +163,9 @@ def save_npz(
     out = collect_split(model_for_cache, loader, device)
     out_path = os.path.join(cache_dir, f"dinov3FD_{dataset_tag}_{split_name}.npz")
 
+    pending = out_path.removesuffix(".npz") + ".partial.npz"
     np.savez_compressed(
-        out_path,
+        pending,
         feat=out["feat"],
         disc=out["disc"],
         indisc=out["indisc"],
@@ -183,6 +185,7 @@ def save_npz(
         topo_scheme=np.asarray(["mrfp_cti_maps"], dtype=object),
     )
 
+    os.replace(pending, out_path)
     print("[cache] saved:", out_path)
     return out_path
 

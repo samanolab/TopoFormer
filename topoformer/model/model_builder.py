@@ -6,6 +6,7 @@ from .disentanglement import OrthogonalDisentangler
 from .topo_cti_v2 import StageSpecificCTIHook
 from .lora import get_vit_blocks, inject_lora_vit
 from .convnext_fusion import build_convnextv2, GatedFusionFD
+from .four_stage_cti import FourStageCTI
 
 
 def build_topoformer_model(
@@ -27,13 +28,11 @@ def build_topoformer_model(
     convnext_name: str,
     topo_delta_norm_factor: float = 0.3,
     topo_inject_mode: str = "per_level",
+    cti_grid=None,
+    cti_levels=(0, 1, 2, 3),
+    dnfd=True,
 ):
-    # topo_inject_mode:
-    #   "per_level"  -> canonical TopoFPN path; topo_c=400; each stage gets its own Lk map.
-    #   "raw_concat" -> simple-concat ablation; topo_c=1600; all stages see the same
-    #                   already-channel-concatenated map. The caller is expected to
-    #                   provide that single 1600ch map under the "L0" key (or any key
-    #                   actually; the hook forces L0 in raw_concat mode).
+    # Simple Concat supplies the same concatenated map at each active stage.
     if topo_inject_mode not in {"per_level", "raw_concat"}:
         raise ValueError(
             f"topo_inject_mode must be 'per_level' or 'raw_concat', got {topo_inject_mode!r}"
@@ -134,14 +133,23 @@ def build_topoformer_model(
 
     vit._encode = types.MethodType(_encode_fp32, vit)
 
-    cnx = build_convnextv2(convnext_ckpt, convnext_name, device)
+    cnx = build_convnextv2(convnext_ckpt, convnext_name, device) if convnext_ckpt else None
 
-    model = GatedFusionFD(vit, cnx)
+    model = GatedFusionFD(vit, cnx, dnfd=dnfd)
     model.proj_cnx.float()
     model.gate_ln.float()
     model.gate_fc.float()
 
     model = model.to(device)
+    if cti_grid is not None:
+        if len(vit.encoder.blocks) != 40 or vit.encoder.n_storage_tokens != 4 or use_topo_inject:
+            raise ValueError("Gated TopoCTI requires ViT-7B/16 and the legacy hook disabled")
+        with torch.random.fork_rng(devices=[]):
+            cti = FourStageCTI(
+                "local", vit.encoder.embed_dim, topo_c, cti_grid,
+                levels=cti_levels, concat=topo_inject_mode == "raw_concat",
+            )
+        vit.encoder._topo_hook = cti.to(device=device, dtype=torch.float32)
     # Surface any async CUDA illegal-access / ECC error that was queued
     # by an earlier op (e.g. previous `model.to()` from preflight), so
     # the user gets a clean stack instead of a misleading one.

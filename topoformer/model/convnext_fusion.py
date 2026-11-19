@@ -230,26 +230,30 @@ def build_convnextv2(convnext_ckpt: str, convnext_name: str, device):
 
 
 class GatedFusionFD(torch.nn.Module):
-    def __init__(self, vit_model: torch.nn.Module, cnx_model: torch.nn.Module):
+    def __init__(self, vit_model: torch.nn.Module, cnx_model: torch.nn.Module, dnfd=True):
         super().__init__()
 
         self.vit = vit_model
         self.cnx = cnx_model
+        self.dnfd = dnfd
 
         self.out_dim = int(getattr(vit_model, "out_dim", 1))
         self.feature_dim = int(getattr(vit_model, "feature_dim", 256))
 
-        cnx_dim = getattr(cnx_model, "num_features", None)
+        cnx_dim = getattr(cnx_model, "num_features", None) if cnx_model is not None else 0
         if cnx_dim is None:
             raise RuntimeError("ConvNeXtV2 model has no num_features; cannot infer feature dim.")
 
         self.cnx_dim = int(cnx_dim)
 
         self.proj_vit = torch.nn.Identity()
-        self.proj_cnx = torch.nn.Linear(self.cnx_dim, self.feature_dim)
+        self.proj_cnx = torch.nn.Linear(self.cnx_dim, self.feature_dim) if self.cnx_dim else torch.nn.Identity()
 
-        self.gate_ln = torch.nn.LayerNorm(self.feature_dim + self.cnx_dim)
-        self.gate_fc = torch.nn.Linear(self.feature_dim + self.cnx_dim, self.feature_dim)
+        self.gate_ln = torch.nn.LayerNorm(self.feature_dim + self.cnx_dim) if self.cnx_dim else torch.nn.Identity()
+        self.gate_fc = torch.nn.Linear(self.feature_dim + self.cnx_dim, self.feature_dim) if self.cnx_dim else torch.nn.Identity()
+        if not dnfd:
+            self.vit.adapter_indisc.requires_grad_(False)
+            self.vit.decoderB.requires_grad_(False)
 
     def __getattr__(self, name):
         try:
@@ -260,6 +264,8 @@ class GatedFusionFD(torch.nn.Module):
     def _encode_fused(self, x: torch.Tensor, topo_levels=None):
         feat_vit = self.vit._encode(x, topo_levels=topo_levels).float()
 
+        if self.cnx is None:
+            return feat_vit, None
         feat_cnx = self.cnx(x)
         if isinstance(feat_cnx, (tuple, list)):
             feat_cnx = feat_cnx[0]
@@ -275,6 +281,12 @@ class GatedFusionFD(torch.nn.Module):
 
     def forward(self, x: torch.Tensor, grl_lambda: float = 1.0, use_adapter: bool = True, topo_levels=None):
         fused, g = self._encode_fused(x, topo_levels=topo_levels)
+        if not self.dnfd:
+            f_disc = self.vit.adapter_disc(fused) if use_adapter else self.vit.proj_disc_simple(fused)
+            logits = self.vit.decoderA(f_disc)
+            # Keep the trainer/cache schema. B is inapplicable to this variant.
+            return dict(logitsA=logits, logitsB=logits, f_disc=f_disc, f_indisc=f_disc,
+                        feat=fused, gate=None, fusion_gate=g)
 
         if use_adapter:
             f_disc = self.vit.adapter_disc(fused)

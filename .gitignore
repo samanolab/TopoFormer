@@ -39,6 +39,10 @@ Thumbs.db
 .env
 .env.local
 environment-lock.txt
+config.local.json
+prepared/
+assets/masks/
+assets/virchow/
 
 # Large PH generation outputs (referenced in code as path suffixes)
 features_cache_*/

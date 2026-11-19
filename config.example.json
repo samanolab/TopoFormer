@@ -1,0 +1,68 @@
+{
+  "dinov3": "/data/topoformer/DBs/dinov3_vit7b16_pretrain_lvd1689m-a955f4ea.pth",
+  "convnext": "/data/topoformer/DBs/convnextv2_base_1k_224_ema.pt",
+  "fusion_feature": "feat",
+  "run_root": "runs",
+  "path_roots": {
+    "/datasets": "/data/topoformer/DBs"
+  },
+  "datasets": {
+    "briancancer": {
+      "train": "/data/topoformer/DBs/Briancancer/train/train",
+      "test": "/data/topoformer/DBs/Briancancer/test/test",
+      "maps": "/data/topoformer/checkpoint/{threshold_dir}/phc_briancancer_topofpn_levels_train_test_maps",
+      "pooled": "/data/topoformer/checkpoint/{threshold_dir}/phc_briancancer_multiscale_pooled_train_test.npz",
+      "split_manifest": "assets/briancancer_splits.npz",
+      "faithfulness": "assets/briancancer_faithfulness.csv",
+      "panels": "assets/fig3_panels.csv",
+      "conditions": {
+        "stain_shift": {
+          "images": "/data/topoformer/perturbed/briancancer/stain_shift",
+          "maps": "prepared/briancancer/{threshold}/stain_shift/maps",
+          "pooled": "prepared/briancancer/{threshold}/stain_shift/pooled.npz"
+        },
+        "patch_shuffle": {
+          "images": "/data/topoformer/perturbed/briancancer/patch_shuffle",
+          "maps": "prepared/briancancer/{threshold}/patch_shuffle/maps",
+          "pooled": "prepared/briancancer/{threshold}/patch_shuffle/pooled.npz"
+        },
+        "external_raw": {
+          "images": "/data/topoformer/DBs/external2",
+          "maps": "prepared/briancancer/{threshold}/external_raw/maps",
+          "pooled": "prepared/briancancer/{threshold}/external_raw/pooled.npz"
+        },
+        "external_reinhard": {
+          "images": "/data/topoformer/DBs/external2_reinhard",
+          "maps": "prepared/briancancer/{threshold}/external_reinhard/maps",
+          "pooled": "prepared/briancancer/{threshold}/external_reinhard/pooled.npz"
+        }
+      },
+      "concat_maps": "prepared/briancancer/{threshold}/simpleconcat/maps",
+      "concat_pooled": "prepared/briancancer/{threshold}/simpleconcat/pooled.npz",
+      "external_manifest": "assets/TCGA_UT_786_sample_manifest.csv"
+    },
+    "crc": {
+      "train": "/data/topoformer/DBs/NCT-CRC-HE-100K",
+      "test": "/data/topoformer/DBs/CRC-VAL-HE-7K",
+      "maps": "/data/topoformer/checkpoint/{threshold_dir}/phc_crc_topofpn_levels_train_test_maps",
+      "pooled": "/data/topoformer/checkpoint/{threshold_dir}/phc_crc_multiscale_pooled_train_test.npz",
+      "split_manifest": "assets/crc_splits.npz",
+      "faithfulness": "assets/crc_faithfulness.csv",
+      "panels": "assets/fig3_panels.csv",
+      "conditions": {
+        "stain_shift": {
+          "images": "/data/topoformer/perturbed/crc/stain_shift",
+          "maps": "prepared/crc/{threshold}/stain_shift/maps",
+          "pooled": "prepared/crc/{threshold}/stain_shift/pooled.npz"
+        },
+        "patch_shuffle": {
+          "images": "/data/topoformer/perturbed/crc/patch_shuffle",
+          "maps": "prepared/crc/{threshold}/patch_shuffle/maps",
+          "pooled": "prepared/crc/{threshold}/patch_shuffle/pooled.npz"
+        }
+      }
+    }
+  },
+  "existing_threshold_runs": {},
+  "compact_checkpoints": true
+}
